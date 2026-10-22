@@ -1,0 +1,18 @@
+
+<div class="app">
+ <aside class="side" aria-label="Navigation">
+  <div class="brand"><div class="logo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div><b>My Day</b></div>
+  <div id="nav"></div>
+  <div class="goals" id="goals"></div>
+  <div class="me"><i id="meinit">MD</i><div><b id="mename">My Day</b><span>Your private pipeline</span></div><button id="mode" title="Switch light or dark" aria-label="Switch light or dark"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button></div>
+ </aside>
+ <section class="window">
+  <header class="wbar" id="wbar"><h1>My Day</h1></header>
+  <div id="main" style="display:flex;flex-direction:column;flex:1;min-height:0"><div class="wbody"><p class="small">Loading your accounts…</p></div></div>
+ </section>
+</div>
+<div id="layer"></div>
+<div class="popups" id="popups" aria-live="polite"></div>
+<div class="toast" id="toast" hidden><span id="toast-msg"></span><button id="toast-undo">Undo</button></div>
+<input type="file" id="filein" accept=".csv,.tsv,.txt,.xlsx,.xls" hidden>
+<input type="file" id="restorein" accept=".json,application/json" hidden>

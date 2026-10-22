@@ -1,3 +1,7 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Crect width=%2224%22 height=%2224%22 rx=%225%22 fill=%22%2323252A%22/%3E%3Cpath d=%22M6 18v-6M10 18V7M14 18v-4M18 18v-8%22 stroke=%22white%22 stroke-width=%222.4%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="/web.js"></script>
 <title>My Day</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
 <style>
@@ -657,6 +661,7 @@ const CHANNELS=["Email","LinkedIn","lemlist","Call","Text"];
 // ---- persistence (Claude storage now; swap this block for a hosted database later) ----
 const Store={mode:"local",db:null,user:null,mcp:null,sample:null,dl:null,uid:null,me:null,canWrite:true,
  async init(){
+  if(window.MYDAY_BOOT){try{await window.MYDAY_BOOT}catch(e){}}
   if(!(window.claude&&window.claude.use))return;
   const get=n=>window.claude.use(n).catch(()=>null);
   const [db,user,mcp,sample,dl]=await Promise.all(["db","user","mcp","sample","downloads"].map(get));
@@ -716,7 +721,7 @@ function watchMine(){
 }
 let saveMsg="";
 function setSave(k,code){syncState=k;saveMsg=k==="err"?(code==="quota_exceeded"?"Storage is full: export a backup and remove old accounts":code==="invalid_argument"?"Couldn't save: check you were invited as Editor":"Couldn't save, retrying"):"";const el=document.getElementById("savest");if(el)el.outerHTML=saveBadge()}
-function saveBadge(){const t=syncState==="busy"?"Saving…":syncState==="err"?saveMsg:Store.mode==="claude"?"Saved":"Saved in this browser only";return `<span class="syncst ${syncState==="err"?"err":syncState==="busy"?"busy":""}" id="savest" title="${Store.mode==="claude"?"Your pipeline is private: only you can see it":"Open inside Claude to keep data in your account"}"><i></i>${esc(t)}</span>`}
+function saveBadge(){const t=syncState==="busy"?"Saving…":syncState==="err"?saveMsg:Store.mode==="claude"?"Saved":"Saved in this browser only";return `<span class="syncst ${syncState==="err"?"err":syncState==="busy"?"busy":""}" id="savest" title="${Store.mode==="claude"?"Your pipeline is private: only you can see it":window.MYDAY_WEB?"Sign in to keep data in your account":"Open inside Claude to keep data in your account"}"><i></i>${esc(t)}</span>`}
 
 // ================= ROE =================
 const alertDays=rule=>rule==="ROE-1"?+CFG.alert1:rule==="ROE-3"?+CFG.alert3:+CFG.alert12;
@@ -1210,11 +1215,11 @@ const Team={ids:[],names:{},rx:[],tx:[],ok:false,
  async cancel(a){if(a.hoId&&a.hoStatus==="sent"){try{await Store.db.collection("handoffs").doc(a.hoId).update({status:"cancelled"})}catch(e){}}
   ["assignedTo","hoId","hoStatus","handedOn","claimedOn","handoff"].forEach(k=>delete a[k]);saveAcc(a)},
  settingsCard(){
-  if(!this.ok)return `<section class="setcard"><h2>Team</h2><p>Team handoff works when My Day is opened inside Claude. Each teammate signs in with their own Claude account.</p></section>`;
+  if(!this.ok)return `<section class="setcard"><h2>Team</h2><p>Team handoff works once you're signed in${window.MYDAY_WEB?"":" (open My Day inside Claude)"}. Each teammate signs in with their own Claude account.</p></section>`;
   const o=this.others();
   return `<section class="setcard"><h2>Team</h2><p>Everyone has a private pipeline. Only handoffs are shared: the account name, a short history, who sent it and who it went to.</p>
    <div class="chips2">${o.length?o.map(i=>`<span class="tchip"><i>${esc(this.name(i)[0])}</i>${esc(this.name(i))}</span>`).join(""):`<span class="small">No teammates have opened My Day yet.</span>`}</div>
-   <p><b>To add someone:</b> open the Share menu on this page, add their email (the one they use for Claude) as <b>Editor</b>. Don't turn on "Anyone with the link": it stops everyone from saving. They appear here the first time they open My Day.</p></section>`;
+   ${window.MYDAY_WEB?`<p><b>To add someone:</b> send them this page's link. They sign in with their ContactOut Google account and appear here.</p>`:`<p><b>To add someone:</b> open the Share menu on this page, add their email (the one they use for Claude) as <b>Editor</b>. Don't turn on "Anyone with the link": it stops everyone from saving. They appear here the first time they open My Day.</p>`}</section>`;
  }
 };
 function isCandidate(a){if(!live(a)||["Won","Lost"].includes(a.stage))return false;if(a.handoff)return true;return !a.positive&&diff(roe12(a),TODAY)<=+CFG.alert12}

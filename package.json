@@ -1,0 +1,6 @@
+{
+  "name": "my-day",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "20.x" }
+}
