@@ -1,4 +1,4 @@
-// Shared helpers for the My Day server routes. No dependencies: plain fetch (Node 20).
+// Shared helpers for the My Day server routes. No dependencies: plain fetch (Node 24).
 
 export const env = {
   supabaseUrl: (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, ""),
