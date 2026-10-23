@@ -72,11 +72,12 @@ function roeAlertBox(){
   ${xs.length>show.length?`<span class="small">And ${xs.length-show.length} more in Pipeline → Has warnings.</span>`:""}</div>`;
 }
 function findByEmail(e){e=String(e||"").toLowerCase();if(!e)return null;const d=e.split("@")[1]||"";return ACC.find(a=>(a.email||"").toLowerCase()===e||(!FREE.has(d)&&a.domain===d))||null}
+let INB_ALL=false;
 function inboundBox(){
- const xs=INBOUNDS.filter(x=>!DISMISS[x.email]&&!findByEmail(x.email));
+ const xs=INBOUNDS.filter(x=>!DISMISS[x.email]&&!DISMISS["acc:"+(x.email.split("@")[1]||"")]&&!findByEmail(x.email));
  if(!xs.length)return "";
  return `<section class="lane" style="${lv("week")}"><div class="lh"><span class="ic">${I.inbox}</span><div><h2>New inbounds</h2><p>From your Inbounds label in Gmail, not in My Day yet.</p></div><span class="n">${xs.length}</span></div>
- <div class="inbx">${xs.slice(0,8).map(x=>`<div class="arow"><b>${esc(x.name||x.email)}</b><span class="small">${esc(x.email)}${x.subject?` · ${esc(x.subject)}`:""} · ${fmt(x.d)}</span><span class="sp"></span><a class="btn sm" href="${esc(x.url)}" target="_blank" rel="noopener">${I.mail}Open</a><button class="btn primary sm" data-act="addinb" data-e="${esc(x.email)}">${I.plus}Add account</button><button class="btn ghost sm" data-act="dismissinb" data-e="${esc(x.email)}">Dismiss</button></div>`).join("")}</div></section>`;
+ <div class="inbx">${(INB_ALL?xs:xs.slice(0,8)).map(x=>`<div class="arow"><b>${esc(x.name||x.email)}</b><span class="small">${esc(x.email)}${x.subject?` · ${esc(x.subject)}`:""} · ${fmt(x.d)}</span><span class="sp"></span><a class="btn sm" href="${esc(x.url)}" target="_blank" rel="noopener">${I.mail}Open</a><button class="btn primary sm" data-act="addinb" data-e="${esc(x.email)}">${I.plus}Add account</button><button class="btn ghost sm" data-act="dismissinb" data-e="${esc(x.email)}">Dismiss</button></div>`).join("")}${xs.length>8?`<button class="btn ghost sm" data-act="inball">${INB_ALL?"Show fewer":`Show all ${xs.length}`}</button>`:""}</div></section>`;
 }
 function renderToday(){
  wbar.innerHTML=`<h1>Today</h1><span class="small">${wd(TODAY,{weekday:"long",day:"numeric",month:"long"})}</span><span class="sp"></span>${topTools()}<button class="tool dark" data-act="startfocus">${I.focus}Start focus</button>`;

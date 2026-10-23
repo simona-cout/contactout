@@ -81,6 +81,7 @@ document.addEventListener("click",e=>{
   case "callsum":callSummarize();break;
   case "callsave":callSave();break;
   case "evacc":{const ev=EVENTS[Number(b.dataset.ev)];accForm(null,{company:ev.company||ev.domain||ev.who,domain:ev.domain,contact:ev.who,email:ev.mail,cat:"Inbound",stage:"Meeting booked",channel:"Email",first:TODAY,last:TODAY,reply:TODAY,positive:TODAY});break;}
+  case "inball":INB_ALL=!INB_ALL;render();break;
   case "addinb":{const x=INBOUNDS.find(z=>z.email===b.dataset.e);const dom=normDomain(x.email);accForm(null,{company:FREE.has(dom)?(x.name||x.email):dom.split(".")[0].replace(/^./,c=>c.toUpperCase()),domain:FREE.has(dom)?"":dom,contact:x.name,email:x.email,cat:"Inbound email",stage:"My reply needed",channel:"Email",first:x.d,reply:x.d});break;}
   case "dismissinb":DISMISS[b.dataset.e]=TODAY;saveState();render();break;
   case "import":importStart();break;

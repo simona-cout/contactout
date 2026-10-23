@@ -263,14 +263,23 @@ async function gmailSync(manual){
      saveAcc(a)});
    });
   }
-  try{const r=await Store.mcp.callTool("Gmail","search_threads",{query:"label:Inbounds newer_than:30d",pageSize:50,view:"THREAD_VIEW_MINIMAL"});
-   const ign=ignored(),my=(CFG.myDomain||"").toLowerCase(),seen=new Set(),out=[];
-   ((r.payload||{}).threads||[]).forEach(th=>{const m=(th.messages||[])[0];if(!m)return;
-    let e=emailOf(m.sender);const dom=e.split("@")[1]||"";
-    if(!e||dom===my||/no-?reply|notification|support@|hello@/.test(e)){const txt=`${m.subject||""} ${m.snippet||""}`;const all=(txt.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig)||[]).map(x=>x.toLowerCase()).filter(x=>!x.endsWith("@"+my));e=all[0]||""}
-    if(!e)return;const d2=e.split("@")[1];if(ign.has(d2)||seen.has(e))return;seen.add(e);
-    const nm=(String(m.sender||"").match(/^"?([^"<]+?)"?\s*</)||[])[1]||"";
-    out.push({email:e,name:emailOf(m.sender)===e?nm.trim():"",subject:m.subject||"",d:S(new Date(m.date||Date.now())),url:th.viewUrl||gmailSearch(e)})});
+  try{const ign=ignored(),my=(CFG.myDomain||"contactout.io").toLowerCase(),seen=new Set(),out=[];
+   const internal=e=>{const d=(e.split("@")[1]||"").toLowerCase();return !d||d===my||/(^|\.)contactout\.(io|net|com)$/.test(d)};
+   const robot=e=>/no-?reply|notification|support@|hello@|calendar|mailer-daemon/i.test(e);
+   let tok=null;
+   for(let pg=0;pg<3;pg++){
+    const r=await Store.mcp.callTool("Gmail","search_threads",{query:"label:Inbounds newer_than:30d",pageSize:50,view:"THREAD_VIEW_MINIMAL",...(tok?{pageToken:tok}:{})});const p=r.payload||{};
+    (p.threads||[]).forEach(th=>{const m=(th.messages||[])[0];if(!m)return;
+     if(/^(accepted|declined|tentative|tentatively accepted)\s*:/i.test(m.subject||""))return;   // calendar replies aren't new inbounds
+     const from=emailOf(m.sender);let e="",nm="";
+     if(from&&!internal(from)&&!robot(from)){e=from;nm=nameOf(m.sender)}
+     else{   // you (or a teammate) wrote to them: use the outside person on the email
+      const ext=[...(m.toRecipients||[]),...(m.ccRecipients||[])].find(x=>{const y=emailOf(x);return y&&!internal(y)&&!robot(y)});
+      if(ext){e=emailOf(ext);nm=nameOf(ext)}}
+     if(!e){const txt=`${m.subject||""} ${m.snippet||""}`;e=((txt.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig)||[]).map(x=>x.toLowerCase()).find(x=>!internal(x)&&!robot(x)))||""}
+     if(!e)return;const d2=e.split("@")[1];if(ign.has(d2)||seen.has(e))return;seen.add(e);
+     out.push({email:e,name:nm,subject:m.subject||"",d:S(new Date(m.date||Date.now())),url:th.viewUrl||gmailSearch(e)})});
+    tok=p.nextPageToken;if(!tok)break}
    INBOUNDS=out;}catch(e){}
   SYNC.gmailAt=Date.now();saveState();
   if(replies.length)popup(replies.length===1?`${firstName(replies[0])||replies[0].company} replied`:`${replies.length} new replies`,replies.map(a=>a.company).slice(0,4).join(", ")+": they're in Reply now.","reply",`<button class="btn sm" data-view="today">Open Today</button>`);
