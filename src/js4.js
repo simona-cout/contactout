@@ -160,12 +160,12 @@ function emailBtn(a,cls){
 const MB={busy:false,err:"",at:0};
 const mbDate=x=>{if(!x)return "";const d=new Date(x);return isNaN(d)?"":S(d)};
 const MB_WON=["closed","self-checkout","renewal"],MB_LOST=["deal_lost","not-interested"];
-// Stage from the dashboard. Deal status stays with a company when it's transferred, so it only counts
-// when you've been in touch since the account became yours; otherwise a paid company is an inherited customer.
-function mbStage(a,{st,last,reply,meet,action,paid,amount,claimed}){
+// Stage from the dashboard. Deal status and amount stay with a company when it's transferred, so a win only counts
+// when the company's first-ever payment came after the account became yours; anyone who paid before is an inherited customer.
+function mbStage(a,{st,last,reply,meet,action,firstPaid,paidAmt,claimed}){
  const yours=!!last||!!reply||!!meet;
- if(MB_WON.includes(st)&&!!last){a.stage="Won";a.wonDate=paid&&paid>=claimed?paid:last;if(amount)a.value=amount;return}
- if(MB_WON.includes(st))a.paidBefore=1;
+ if(firstPaid&&firstPaid>=claimed){a.stage="Won";a.wonDate=firstPaid;if(paidAmt)a.value=paidAmt;if(!(a.first&&a.first<=firstPaid))a.wonVia="self-checkout";return}
+ if(MB_WON.includes(st)||firstPaid)a.paidBefore=1;
  if(MB_LOST.includes(st)&&!!last){a.stage="Lost";return}
  if(st==="negotiations"&&yours){a.stage="Pricing sent";a.pricing=true;return}
  if(/reply/i.test(action)&&reply){a.stage="My reply needed";return}
@@ -180,7 +180,7 @@ async function mbSync(manual){
  try{
   const rows=[];let cols=null;
   for(let off=0;off<10000;off+=500){
-   const sql=`SELECT c.id, c.domain, c.name, c.deal_status, c.sales_assigned_date, c.last_transferred_date, c.amount_received, c.paid_date, c.expiration_date, c.linkedin, s.industry, s.size, s.location, s.user_count, s.active_users_count, s.credit_30, s.credit_all, s.last_contact_assigned_rep, s.last_reply, s.last_meeting, s.action FROM companies c LEFT JOIN company_statistics s ON s.domain = c.domain WHERE c.sales_id = ${id} ORDER BY c.id LIMIT 500 OFFSET ${off}`;
+   const sql=`SELECT c.id, c.domain, c.name, c.deal_status, c.sales_assigned_date, c.last_transferred_date, c.amount_received, c.paid_date, c.expiration_date, c.linkedin, s.industry, s.size, s.location, s.user_count, s.active_users_count, s.credit_30, s.credit_all, s.last_contact_assigned_rep, s.last_reply, s.last_meeting, s.action, (SELECT MIN(p.paid_date) FROM company_deal_payments p JOIN company_deal_statuses ds ON ds.id = p.company_deal_status_id WHERE ds.company_id = c.id AND p.deleted_at IS NULL) AS first_paid, (SELECT MAX(p.paid_date) FROM company_deal_payments p JOIN company_deal_statuses ds ON ds.id = p.company_deal_status_id WHERE ds.company_id = c.id AND p.deleted_at IS NULL) AS last_paid, (SELECT SUM(p.amount_received) FROM company_deal_payments p JOIN company_deal_statuses ds ON ds.id = p.company_deal_status_id WHERE ds.company_id = c.id AND p.deleted_at IS NULL AND p.paid_date >= COALESCE(c.last_transferred_date, c.sales_assigned_date)) AS paid_since_claim FROM companies c LEFT JOIN company_statistics s ON s.domain = c.domain WHERE c.sales_id = ${id} ORDER BY c.id LIMIT 500 OFFSET ${off}`;
    const r=await Store.mcp.callTool("Metabase","execute_sql",{database_id:4,sql});
    const data=(r.payload&&r.payload.data)||{};cols=cols||(data.cols||[]).map(c=>c.name);const rs=data.rows||[];rows.push(...rs);if(rs.length<500)break;
   }
@@ -193,7 +193,8 @@ async function mbSync(manual){
    const mine=d=>d&&d>=claimed?d:"";   // ignore anything from before the account became yours
    const last=mine(mbDate(get(r,"last_contact_assigned_rep"))),reply=mine(mbDate(get(r,"last_reply"))),meet=mine(mbDate(get(r,"last_meeting")));
    const st=String(get(r,"deal_status")||"").toLowerCase(),action=String(get(r,"action")||"").trim();
-   const info={mbId:get(r,"id"),industry:get(r,"industry")||"",size:get(r,"size")||"",location:get(r,"location")||"",users:+get(r,"user_count")||0,activeUsers:+get(r,"active_users_count")||0,credits30:+get(r,"credit_30")||0,creditsAll:+get(r,"credit_all")||0,dashAction:action,dealStatus:st,amount:+get(r,"amount_received")||0,paidDate:mbDate(get(r,"paid_date")),expires:mbDate(get(r,"expiration_date"))};
+   const info={mbId:get(r,"id"),industry:get(r,"industry")||"",size:get(r,"size")||"",location:get(r,"location")||"",users:+get(r,"user_count")||0,activeUsers:+get(r,"active_users_count")||0,credits30:+get(r,"credit_30")||0,creditsAll:+get(r,"credit_all")||0,dashAction:action,dealStatus:st,amount:+get(r,"amount_received")||0,paidDate:mbDate(get(r,"paid_date")),expires:mbDate(get(r,"expiration_date")),firstPaid:mbDate(get(r,"first_paid")),lastPaid:mbDate(get(r,"last_paid")),paidSince:+get(r,"paid_since_claim")||0};
+   const pay={firstPaid:info.firstPaid,paidAmt:info.paidSince||info.amount};
    let a=byDom.get(domain);
    if(!a){
     const li=String(get(r,"linkedin")||"").trim();
@@ -201,7 +202,7 @@ async function mbSync(manual){
     if(last){a.first=last;a.last=last}
     if(reply){a.reply=reply;if(!a.first||reply<a.first)a.first=reply}
     if(meet){a.positive=meet;a.meetingDate=meet}
-    mbStage(a,{st,last,reply,meet,action,paid:mbDate(get(r,"paid_date")),amount:+get(r,"amount_received")||0,claimed});
+    mbStage(a,{st,last,reply,meet,action,...pay,claimed});
     Object.keys(a).forEach(k=>{if(a[k]==="")delete a[k]});
     ACC.push(a);saveAcc(a);added.push(a);return;
    }
@@ -212,19 +213,21 @@ async function mbSync(manual){
    if(last&&(!a.last||last>a.last))applyTouch(a,a.channel||"Email","me",last,null,true);
    if(reply&&(!a.reply||reply>a.reply))applyTouch(a,a.channel||"Email","them",reply,null,true);
    if(meet&&(!a.positive||meet>a.positive)){a.positive=meet;if(!a.meetingDate||meet>a.meetingDate)a.meetingDate=meet}
-   const fix=(SYNC.mbV||1)<2&&!(a.log||[]).some(l=>!l.auto)&&!(a.calls||[]).length;   // one-time clean-up of stages copied from previous reps
-   if(fix){["stage","wonDate","value","pricing","lastCheck","paidBefore"].forEach(k=>delete a[k]);mbStage(a,{st,last:a.last||"",reply:a.reply||"",meet:a.meetingDate||"",action,paid:mbDate(get(r,"paid_date")),amount:+get(r,"amount_received")||0,claimed:a.claimed||claimed})}
+   const untouched=!(a.log||[]).some(l=>!l.auto)&&!(a.calls||[]).length&&!a.stageSince;   // nothing you set yourself
+   const newWin=info.firstPaid&&info.firstPaid>=(a.claimed||claimed);
+   const fix=(SYNC.mbV||1)<2&&untouched||(SYNC.mbV||1)<3&&untouched&&a.stage==="Won"&&!newWin;   // one-time clean-ups of wins copied from previous reps
+   if(fix){["stage","wonDate","value","pricing","lastCheck","paidBefore","wonVia"].forEach(k=>delete a[k]);mbStage(a,{st,last:a.last||"",reply:a.reply||"",meet:a.meetingDate||"",action,...pay,claimed:a.claimed||claimed})}
    else{const yours=!!last;
-    if(MB_WON.includes(st)&&yours&&!["Won"].includes(a.stage)){a.stage="Won";a.wonDate=mbDate(get(r,"paid_date"))||last;if(!a.value&&+get(r,"amount_received"))a.value=+get(r,"amount_received")}
+    if(newWin&&a.stage!=="Won"){a.stage="Won";a.wonDate=info.firstPaid;if(!a.value&&(info.paidSince||info.amount))a.value=info.paidSince||info.amount;if(!(a.first&&a.first<=info.firstPaid))a.wonVia="self-checkout"}
     if(MB_LOST.includes(st)&&yours&&!["Won","Lost"].includes(a.stage))a.stage="Lost";
-    a.paidBefore=MB_WON.includes(st)&&!yours?1:undefined;if(!a.paidBefore)delete a.paidBefore;}
+    a.paidBefore=!newWin&&(MB_WON.includes(st)||!!info.firstPaid)?1:undefined;if(!a.paidBefore)delete a.paidBefore;}
    if(JSON.stringify([a.last,a.reply,a.positive,a.stage])!==before)updated.push(a);
    saveAcc(a);
   });
   // accounts that came from Metabase but are no longer under your name
   const gone=ACC.filter(a=>a.mb&&live(a)&&a.domain&&!seen.has(a.domain)&&!a.mbGone);
   gone.forEach(a=>{a.mbGone=TODAY;a.archived=true;saveAcc(a)});
-  MB.at=Date.now();SYNC.mbAt=MB.at;SYNC.mbV=2;saveState();buildTasks();render(true);
+  MB.at=Date.now();SYNC.mbAt=MB.at;SYNC.mbV=3;saveState();buildTasks();render(true);
   if(added.length)popup(`${added.length} new ${added.length===1?"account":"accounts"} from Metabase`,added.slice(0,4).map(a=>a.company).join(", ")+(added.length>4?"…":""),"week",`<button class="btn sm" data-view="pipe">Open Pipeline</button>`);
   if(gone.length)popup(`${gone.length} ${gone.length===1?"account is":"accounts are"} no longer under your name`,gone.slice(0,4).map(a=>a.company).join(", ")+": moved out of your pipeline.","overdue");
   if(manual)toast(`Metabase: ${rows.length} accounts · ${added.length} new · ${updated.length} updated`);

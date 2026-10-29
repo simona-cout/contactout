@@ -1016,7 +1016,7 @@ function stageBtns(a){const cur=colOf(a);return `<div class="stgrow" role="group
 function dealCard(a){
  const p=plan(a),w=warns(a),h=health(a);
  return `<article class="dcard" data-open="${a.id}" tabindex="0">
-  <div class="dc-top"><span class="dc-list">${esc(a.cat||"")}${a.paidBefore?` · <b style="color:var(--later-ink)">Paying customer</b>`:""}</span>${logBtn(a)}</div>
+  <div class="dc-top"><span class="dc-list">${esc(a.cat||"")}${a.stage==="Won"&&a.wonVia?` · <b style="color:var(--later-ink)">Self-checkout</b>`:a.paidBefore?(a.lastPaid&&diff(TODAY,a.lastPaid)>372?` · <b style="color:var(--overdue-ink)">Lapsed customer</b>`:` · <b style="color:var(--later-ink)">Paying customer</b>`):""}</span>${logBtn(a)}</div>
   <div class="dc-name">${esc(a.company)}${coArrow(a)}${a.product?` <span>· ${esc(a.product)}</span>`:""}</div>
   <div class="dc-val">${a.value?money(a.value):`<span class="small">No value yet</span>`} ${scorePill(a)}</div>
   ${p.lane&&p.lane!=="auto"?(p.go?`<a class="dc-next act" data-go="${a.id}" href="${esc(p.go.url)}" target="_blank" rel="noopener" style="${lv(p.lane)}" title="${esc(p.go.label)}"><i></i><span><b>${esc(p.why)}</b> · ${rel(p.due)}<small>${esc(p.sub)}</small></span><em>${CH[p.go.kind]||""}</em></a>`:`<div class="dc-next act" style="${lv(p.lane)}"><i></i><span><b>${esc(p.why)}</b> · ${rel(p.due)}<small>${esc(p.sub)}</small></span></div>`):p.lane==="auto"?`<div class="dc-next" style="${lv("auto")}"><i></i><span>${esc(p.sub)}</span></div>`:""}
@@ -1072,11 +1072,11 @@ function renderCustomers(){
  const rows=all.filter(a=>custF==="all"||custSignals(a).some(x=>x[0]===custF)).sort((x,y)=>rank(x)-rank(y)||(+(y.amount||y.value)||0)-(+(x.amount||x.value)||0));
  const tot=all.reduce((s,a)=>s+(+(a.amount||a.value)||0),0),cnt=k=>all.filter(a=>custSignals(a).some(x=>x[0]===k)).length;
  wbar.innerHTML=`<h1>Paying customers</h1><span class="small">${all.length} accounts · ${money(tot)||"$0"} paid so far</span><span class="sp"></span>${CUSTF.map(([k,l])=>`<button class="tool${custF===k?" on":""}" data-act="custf" data-k="${k}">${l}${k==="all"?"":` <b>${cnt(k)}</b>`}</button>`).join("")}`;
- const card=a=>{const sg=custSignals(a),ren=renewalOf(a),amt=+(a.amount||a.value)||0;
+ const card=a=>{const sg=custSignals(a),ren=renewalOf(a),amt=+(a.stage==="Won"?(a.value||a.paidSince||a.amount):a.amount)||0,lapsed=a.stage!=="Won"&&a.lastPaid&&diff(TODAY,a.lastPaid)>372;
   return `<article class="dcard${a.stage==="Won"?" myclient":""}" data-open="${a.id}" tabindex="0">
-   <div class="dc-top"><span class="dc-list">${a.stage==="Won"?`<span class="clientbadge">${I.check}Your client</span>`:"Paying before you"}${a.dealStatus?` · ${esc(a.dealStatus)}`:""}</span>${logBtn(a)}</div>
+   <div class="dc-top"><span class="dc-list">${a.stage==="Won"?`<span class="clientbadge">${I.check}Your client</span>${a.wonVia?" · self-checkout":""}`:lapsed?`<b style="color:var(--overdue-ink)">Lapsed customer</b>`:"Paying before you"}${a.dealStatus?` · ${esc(a.dealStatus)}`:""}</span>${logBtn(a)}</div>
    <div class="dc-name">${esc(a.company)}${coArrow(a)} <span>· ${esc(a.domain||"")}</span></div>
-   <div class="dc-val">${amt?money(amt):`<span class="small">Amount unknown</span>`} <span class="small">${a.paidDate?`· paid ${fmtY(a.paidDate)}`:a.wonDate&&a.stage==="Won"?`· closed ${fmtY(a.wonDate)}`:""}</span></div>
+   <div class="dc-val">${amt?money(amt):`<span class="small">Amount unknown</span>`} <span class="small">${a.stage==="Won"&&a.wonDate?`· first payment ${fmtY(a.wonDate)}`:a.lastPaid?`· last paid ${fmtY(a.lastPaid)}`:a.paidDate?`· paid ${fmtY(a.paidDate)}`:""}</span></div>
    <div class="small">${ren?`Renews ${fmtY(ren)}`:`<button class="lnk" style="background:none;border:0;padding:0;text-decoration:underline;color:var(--week-ink);font-weight:600" data-act="editacc" data-id="${a.id}">Set renewal date</button>`}${a.mb?` · ${a.users||0} users, ${a.activeUsers||0} active · ${(+a.credits30||0).toLocaleString("en-US")} credits in 30 days`:""}</div>
    ${sg.length?`<div class="dc-warn">${sg.map(([k,t])=>`<span class="wn" style="background:var(--${SIGC[k]}-bg);color:var(--${SIGC[k]}-ink);box-shadow:none">${esc(t)}</span>`).join("")}</div>`:""}
    <div class="dc-next act" style="${lv(sg[0]?SIGC[sg[0][0]]:"later")}"><i></i><span><b>${esc(custNext(a))}</b><small>${esc(lastLine(a))}${a.email?` · main contact ${esc(a.contact||a.email)}`:""}</small></span></div>
@@ -1720,12 +1720,12 @@ function emailBtn(a,cls){
 const MB={busy:false,err:"",at:0};
 const mbDate=x=>{if(!x)return "";const d=new Date(x);return isNaN(d)?"":S(d)};
 const MB_WON=["closed","self-checkout","renewal"],MB_LOST=["deal_lost","not-interested"];
-// Stage from the dashboard. Deal status stays with a company when it's transferred, so it only counts
-// when you've been in touch since the account became yours; otherwise a paid company is an inherited customer.
-function mbStage(a,{st,last,reply,meet,action,paid,amount,claimed}){
+// Stage from the dashboard. Deal status and amount stay with a company when it's transferred, so a win only counts
+// when the company's first-ever payment came after the account became yours; anyone who paid before is an inherited customer.
+function mbStage(a,{st,last,reply,meet,action,firstPaid,paidAmt,claimed}){
  const yours=!!last||!!reply||!!meet;
- if(MB_WON.includes(st)&&!!last){a.stage="Won";a.wonDate=paid&&paid>=claimed?paid:last;if(amount)a.value=amount;return}
- if(MB_WON.includes(st))a.paidBefore=1;
+ if(firstPaid&&firstPaid>=claimed){a.stage="Won";a.wonDate=firstPaid;if(paidAmt)a.value=paidAmt;if(!(a.first&&a.first<=firstPaid))a.wonVia="self-checkout";return}
+ if(MB_WON.includes(st)||firstPaid)a.paidBefore=1;
  if(MB_LOST.includes(st)&&!!last){a.stage="Lost";return}
  if(st==="negotiations"&&yours){a.stage="Pricing sent";a.pricing=true;return}
  if(/reply/i.test(action)&&reply){a.stage="My reply needed";return}
@@ -1740,7 +1740,7 @@ async function mbSync(manual){
  try{
   const rows=[];let cols=null;
   for(let off=0;off<10000;off+=500){
-   const sql=`SELECT c.id, c.domain, c.name, c.deal_status, c.sales_assigned_date, c.last_transferred_date, c.amount_received, c.paid_date, c.expiration_date, c.linkedin, s.industry, s.size, s.location, s.user_count, s.active_users_count, s.credit_30, s.credit_all, s.last_contact_assigned_rep, s.last_reply, s.last_meeting, s.action FROM companies c LEFT JOIN company_statistics s ON s.domain = c.domain WHERE c.sales_id = ${id} ORDER BY c.id LIMIT 500 OFFSET ${off}`;
+   const sql=`SELECT c.id, c.domain, c.name, c.deal_status, c.sales_assigned_date, c.last_transferred_date, c.amount_received, c.paid_date, c.expiration_date, c.linkedin, s.industry, s.size, s.location, s.user_count, s.active_users_count, s.credit_30, s.credit_all, s.last_contact_assigned_rep, s.last_reply, s.last_meeting, s.action, (SELECT MIN(p.paid_date) FROM company_deal_payments p JOIN company_deal_statuses ds ON ds.id = p.company_deal_status_id WHERE ds.company_id = c.id AND p.deleted_at IS NULL) AS first_paid, (SELECT MAX(p.paid_date) FROM company_deal_payments p JOIN company_deal_statuses ds ON ds.id = p.company_deal_status_id WHERE ds.company_id = c.id AND p.deleted_at IS NULL) AS last_paid, (SELECT SUM(p.amount_received) FROM company_deal_payments p JOIN company_deal_statuses ds ON ds.id = p.company_deal_status_id WHERE ds.company_id = c.id AND p.deleted_at IS NULL AND p.paid_date >= COALESCE(c.last_transferred_date, c.sales_assigned_date)) AS paid_since_claim FROM companies c LEFT JOIN company_statistics s ON s.domain = c.domain WHERE c.sales_id = ${id} ORDER BY c.id LIMIT 500 OFFSET ${off}`;
    const r=await Store.mcp.callTool("Metabase","execute_sql",{database_id:4,sql});
    const data=(r.payload&&r.payload.data)||{};cols=cols||(data.cols||[]).map(c=>c.name);const rs=data.rows||[];rows.push(...rs);if(rs.length<500)break;
   }
@@ -1753,7 +1753,8 @@ async function mbSync(manual){
    const mine=d=>d&&d>=claimed?d:"";   // ignore anything from before the account became yours
    const last=mine(mbDate(get(r,"last_contact_assigned_rep"))),reply=mine(mbDate(get(r,"last_reply"))),meet=mine(mbDate(get(r,"last_meeting")));
    const st=String(get(r,"deal_status")||"").toLowerCase(),action=String(get(r,"action")||"").trim();
-   const info={mbId:get(r,"id"),industry:get(r,"industry")||"",size:get(r,"size")||"",location:get(r,"location")||"",users:+get(r,"user_count")||0,activeUsers:+get(r,"active_users_count")||0,credits30:+get(r,"credit_30")||0,creditsAll:+get(r,"credit_all")||0,dashAction:action,dealStatus:st,amount:+get(r,"amount_received")||0,paidDate:mbDate(get(r,"paid_date")),expires:mbDate(get(r,"expiration_date"))};
+   const info={mbId:get(r,"id"),industry:get(r,"industry")||"",size:get(r,"size")||"",location:get(r,"location")||"",users:+get(r,"user_count")||0,activeUsers:+get(r,"active_users_count")||0,credits30:+get(r,"credit_30")||0,creditsAll:+get(r,"credit_all")||0,dashAction:action,dealStatus:st,amount:+get(r,"amount_received")||0,paidDate:mbDate(get(r,"paid_date")),expires:mbDate(get(r,"expiration_date")),firstPaid:mbDate(get(r,"first_paid")),lastPaid:mbDate(get(r,"last_paid")),paidSince:+get(r,"paid_since_claim")||0};
+   const pay={firstPaid:info.firstPaid,paidAmt:info.paidSince||info.amount};
    let a=byDom.get(domain);
    if(!a){
     const li=String(get(r,"linkedin")||"").trim();
@@ -1761,7 +1762,7 @@ async function mbSync(manual){
     if(last){a.first=last;a.last=last}
     if(reply){a.reply=reply;if(!a.first||reply<a.first)a.first=reply}
     if(meet){a.positive=meet;a.meetingDate=meet}
-    mbStage(a,{st,last,reply,meet,action,paid:mbDate(get(r,"paid_date")),amount:+get(r,"amount_received")||0,claimed});
+    mbStage(a,{st,last,reply,meet,action,...pay,claimed});
     Object.keys(a).forEach(k=>{if(a[k]==="")delete a[k]});
     ACC.push(a);saveAcc(a);added.push(a);return;
    }
@@ -1772,19 +1773,21 @@ async function mbSync(manual){
    if(last&&(!a.last||last>a.last))applyTouch(a,a.channel||"Email","me",last,null,true);
    if(reply&&(!a.reply||reply>a.reply))applyTouch(a,a.channel||"Email","them",reply,null,true);
    if(meet&&(!a.positive||meet>a.positive)){a.positive=meet;if(!a.meetingDate||meet>a.meetingDate)a.meetingDate=meet}
-   const fix=(SYNC.mbV||1)<2&&!(a.log||[]).some(l=>!l.auto)&&!(a.calls||[]).length;   // one-time clean-up of stages copied from previous reps
-   if(fix){["stage","wonDate","value","pricing","lastCheck","paidBefore"].forEach(k=>delete a[k]);mbStage(a,{st,last:a.last||"",reply:a.reply||"",meet:a.meetingDate||"",action,paid:mbDate(get(r,"paid_date")),amount:+get(r,"amount_received")||0,claimed:a.claimed||claimed})}
+   const untouched=!(a.log||[]).some(l=>!l.auto)&&!(a.calls||[]).length&&!a.stageSince;   // nothing you set yourself
+   const newWin=info.firstPaid&&info.firstPaid>=(a.claimed||claimed);
+   const fix=(SYNC.mbV||1)<2&&untouched||(SYNC.mbV||1)<3&&untouched&&a.stage==="Won"&&!newWin;   // one-time clean-ups of wins copied from previous reps
+   if(fix){["stage","wonDate","value","pricing","lastCheck","paidBefore","wonVia"].forEach(k=>delete a[k]);mbStage(a,{st,last:a.last||"",reply:a.reply||"",meet:a.meetingDate||"",action,...pay,claimed:a.claimed||claimed})}
    else{const yours=!!last;
-    if(MB_WON.includes(st)&&yours&&!["Won"].includes(a.stage)){a.stage="Won";a.wonDate=mbDate(get(r,"paid_date"))||last;if(!a.value&&+get(r,"amount_received"))a.value=+get(r,"amount_received")}
+    if(newWin&&a.stage!=="Won"){a.stage="Won";a.wonDate=info.firstPaid;if(!a.value&&(info.paidSince||info.amount))a.value=info.paidSince||info.amount;if(!(a.first&&a.first<=info.firstPaid))a.wonVia="self-checkout"}
     if(MB_LOST.includes(st)&&yours&&!["Won","Lost"].includes(a.stage))a.stage="Lost";
-    a.paidBefore=MB_WON.includes(st)&&!yours?1:undefined;if(!a.paidBefore)delete a.paidBefore;}
+    a.paidBefore=!newWin&&(MB_WON.includes(st)||!!info.firstPaid)?1:undefined;if(!a.paidBefore)delete a.paidBefore;}
    if(JSON.stringify([a.last,a.reply,a.positive,a.stage])!==before)updated.push(a);
    saveAcc(a);
   });
   // accounts that came from Metabase but are no longer under your name
   const gone=ACC.filter(a=>a.mb&&live(a)&&a.domain&&!seen.has(a.domain)&&!a.mbGone);
   gone.forEach(a=>{a.mbGone=TODAY;a.archived=true;saveAcc(a)});
-  MB.at=Date.now();SYNC.mbAt=MB.at;SYNC.mbV=2;saveState();buildTasks();render(true);
+  MB.at=Date.now();SYNC.mbAt=MB.at;SYNC.mbV=3;saveState();buildTasks();render(true);
   if(added.length)popup(`${added.length} new ${added.length===1?"account":"accounts"} from Metabase`,added.slice(0,4).map(a=>a.company).join(", ")+(added.length>4?"…":""),"week",`<button class="btn sm" data-view="pipe">Open Pipeline</button>`);
   if(gone.length)popup(`${gone.length} ${gone.length===1?"account is":"accounts are"} no longer under your name`,gone.slice(0,4).map(a=>a.company).join(", ")+": moved out of your pipeline.","overdue");
   if(manual)toast(`Metabase: ${rows.length} accounts · ${added.length} new · ${updated.length} updated`);

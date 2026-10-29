@@ -143,7 +143,7 @@ function stageBtns(a){const cur=colOf(a);return `<div class="stgrow" role="group
 function dealCard(a){
  const p=plan(a),w=warns(a),h=health(a);
  return `<article class="dcard" data-open="${a.id}" tabindex="0">
-  <div class="dc-top"><span class="dc-list">${esc(a.cat||"")}${a.paidBefore?` · <b style="color:var(--later-ink)">Paying customer</b>`:""}</span>${logBtn(a)}</div>
+  <div class="dc-top"><span class="dc-list">${esc(a.cat||"")}${a.stage==="Won"&&a.wonVia?` · <b style="color:var(--later-ink)">Self-checkout</b>`:a.paidBefore?(a.lastPaid&&diff(TODAY,a.lastPaid)>372?` · <b style="color:var(--overdue-ink)">Lapsed customer</b>`:` · <b style="color:var(--later-ink)">Paying customer</b>`):""}</span>${logBtn(a)}</div>
   <div class="dc-name">${esc(a.company)}${coArrow(a)}${a.product?` <span>· ${esc(a.product)}</span>`:""}</div>
   <div class="dc-val">${a.value?money(a.value):`<span class="small">No value yet</span>`} ${scorePill(a)}</div>
   ${p.lane&&p.lane!=="auto"?(p.go?`<a class="dc-next act" data-go="${a.id}" href="${esc(p.go.url)}" target="_blank" rel="noopener" style="${lv(p.lane)}" title="${esc(p.go.label)}"><i></i><span><b>${esc(p.why)}</b> · ${rel(p.due)}<small>${esc(p.sub)}</small></span><em>${CH[p.go.kind]||""}</em></a>`:`<div class="dc-next act" style="${lv(p.lane)}"><i></i><span><b>${esc(p.why)}</b> · ${rel(p.due)}<small>${esc(p.sub)}</small></span></div>`):p.lane==="auto"?`<div class="dc-next" style="${lv("auto")}"><i></i><span>${esc(p.sub)}</span></div>`:""}
@@ -199,11 +199,11 @@ function renderCustomers(){
  const rows=all.filter(a=>custF==="all"||custSignals(a).some(x=>x[0]===custF)).sort((x,y)=>rank(x)-rank(y)||(+(y.amount||y.value)||0)-(+(x.amount||x.value)||0));
  const tot=all.reduce((s,a)=>s+(+(a.amount||a.value)||0),0),cnt=k=>all.filter(a=>custSignals(a).some(x=>x[0]===k)).length;
  wbar.innerHTML=`<h1>Paying customers</h1><span class="small">${all.length} accounts · ${money(tot)||"$0"} paid so far</span><span class="sp"></span>${CUSTF.map(([k,l])=>`<button class="tool${custF===k?" on":""}" data-act="custf" data-k="${k}">${l}${k==="all"?"":` <b>${cnt(k)}</b>`}</button>`).join("")}`;
- const card=a=>{const sg=custSignals(a),ren=renewalOf(a),amt=+(a.amount||a.value)||0;
+ const card=a=>{const sg=custSignals(a),ren=renewalOf(a),amt=+(a.stage==="Won"?(a.value||a.paidSince||a.amount):a.amount)||0,lapsed=a.stage!=="Won"&&a.lastPaid&&diff(TODAY,a.lastPaid)>372;
   return `<article class="dcard${a.stage==="Won"?" myclient":""}" data-open="${a.id}" tabindex="0">
-   <div class="dc-top"><span class="dc-list">${a.stage==="Won"?`<span class="clientbadge">${I.check}Your client</span>`:"Paying before you"}${a.dealStatus?` · ${esc(a.dealStatus)}`:""}</span>${logBtn(a)}</div>
+   <div class="dc-top"><span class="dc-list">${a.stage==="Won"?`<span class="clientbadge">${I.check}Your client</span>${a.wonVia?" · self-checkout":""}`:lapsed?`<b style="color:var(--overdue-ink)">Lapsed customer</b>`:"Paying before you"}${a.dealStatus?` · ${esc(a.dealStatus)}`:""}</span>${logBtn(a)}</div>
    <div class="dc-name">${esc(a.company)}${coArrow(a)} <span>· ${esc(a.domain||"")}</span></div>
-   <div class="dc-val">${amt?money(amt):`<span class="small">Amount unknown</span>`} <span class="small">${a.paidDate?`· paid ${fmtY(a.paidDate)}`:a.wonDate&&a.stage==="Won"?`· closed ${fmtY(a.wonDate)}`:""}</span></div>
+   <div class="dc-val">${amt?money(amt):`<span class="small">Amount unknown</span>`} <span class="small">${a.stage==="Won"&&a.wonDate?`· first payment ${fmtY(a.wonDate)}`:a.lastPaid?`· last paid ${fmtY(a.lastPaid)}`:a.paidDate?`· paid ${fmtY(a.paidDate)}`:""}</span></div>
    <div class="small">${ren?`Renews ${fmtY(ren)}`:`<button class="lnk" style="background:none;border:0;padding:0;text-decoration:underline;color:var(--week-ink);font-weight:600" data-act="editacc" data-id="${a.id}">Set renewal date</button>`}${a.mb?` · ${a.users||0} users, ${a.activeUsers||0} active · ${(+a.credits30||0).toLocaleString("en-US")} credits in 30 days`:""}</div>
    ${sg.length?`<div class="dc-warn">${sg.map(([k,t])=>`<span class="wn" style="background:var(--${SIGC[k]}-bg);color:var(--${SIGC[k]}-ink);box-shadow:none">${esc(t)}</span>`).join("")}</div>`:""}
    <div class="dc-next act" style="${lv(sg[0]?SIGC[sg[0][0]]:"later")}"><i></i><span><b>${esc(custNext(a))}</b><small>${esc(lastLine(a))}${a.email?` · main contact ${esc(a.contact||a.email)}`:""}</small></span></div>
